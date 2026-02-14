@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders - Beowulf</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">Beowulf</a>
+            <div>
+                <a href="/" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
+                <a href="/orders.html" class="btn btn-outline-light btn-sm me-2">Orders</a>
+                <a href="/swagger-ui.html" class="btn btn-outline-info btn-sm" target="_blank">API Docs</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div id="pageAlert"></div>
+        <div class="row">
+            <div class="col-md-8">
+                <h2>Orders</h2>
+                <div class="mb-3">
+                    <label class="form-label">Filter by Type:</label>
+                    <select id="typeFilter" class="form-select form-select-sm w-auto d-inline-block">
+                        <option value="">All</option>
+                        <option value="ECHO">ECHO</option>
+                        <option value="XRAY">XRAY</option>
+                        <option value="LAB">LAB</option>
+                        <option value="MRI">MRI</option>
+                        <option value="CT">CT</option>
+                        <option value="ULTRASOUND">ULTRASOUND</option>
+                    </select>
+                </div>
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Patient Name</th>
+                            <th>MRN</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody id="orderTableBody">
+                        <tr><td colspan="6" class="text-muted">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="col-md-4" id="createSection">
+                <h2>Create Order</h2>
+                <div id="formAlert"></div>
+                <form id="createOrderForm">
+                    <div class="mb-2">
+                        <label class="form-label">MRN</label>
+                        <input type="text" class="form-control form-control-sm" id="mrn" required maxlength="50" placeholder="e.g. MRN001">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">First Name</label>
+                        <input type="text" class="form-control form-control-sm" id="firstName" required maxlength="100">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Last Name</label>
+                        <input type="text" class="form-control form-control-sm" id="lastName" required maxlength="100">
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Date of Birth (YYYY-MM-DD)</label>
+                        <input type="text" class="form-control form-control-sm" id="dateOfBirth" required placeholder="1990-05-15" pattern="\d{4}-\d{2}-\d{2}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Order Type</label>
+                        <select class="form-select form-select-sm" id="orderType" required>
+                            <option value="ECHO">ECHO</option>
+                            <option value="XRAY">XRAY</option>
+                            <option value="LAB">LAB</option>
+                            <option value="MRI">MRI</option>
+                            <option value="CT">CT</option>
+                            <option value="ULTRASOUND">ULTRASOUND</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Create Order</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '';
+
+        function statusColor(status) {
+            switch(status) {
+                case 'ORDERED': return 'primary';
+                case 'FINALIZED': return 'success';
+                case 'AMENDED': return 'warning';
+                case 'CANCELED': return 'secondary';
+                default: return 'info';
+            }
+        }
+
+        function showAlert(containerId, message, type) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            if (type === 'success') {
+                setTimeout(() => { container.innerHTML = ''; }, 4000);
+            }
+        }
+
+        async function loadOrders() {
+            const type = document.getElementById('typeFilter').value;
+            let url = API + '/api/orders';
+            if (type) url += '?type=' + type;
+
+            try {
+                const res = await fetch(url);
+                const orders = await res.json();
+                const tbody = document.getElementById('orderTableBody');
+
+                if (orders.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-muted">No orders found</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = orders.map(o => `
+                    <tr style="cursor:pointer" onclick="window.location.href='/detail.html?id=${o.id}'">
+                        <td>${o.id}</td>
+                        <td>${o.firstName} ${o.lastName}</td>
+                        <td>${o.mrn}</td>
+                        <td>${o.type}</td>
+                        <td><span class="badge bg-${statusColor(o.studyStatus)}">${o.studyStatus}</span></td>
+                        <td>${new Date(o.createDate).toLocaleDateString()}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                document.getElementById('orderTableBody').innerHTML = '<tr><td colspan="6" class="text-danger">Failed to load orders</td></tr>';
+            }
+        }
+
+        document.getElementById('typeFilter').addEventListener('change', loadOrders);
+
+        document.getElementById('createOrderForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const data = {
+                mrn: document.getElementById('mrn').value,
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                dateOfBirth: document.getElementById('dateOfBirth').value,
+                type: document.getElementById('orderType').value
+            };
+
+            try {
+                const res = await fetch(API + '/api/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (res.ok) {
+                    const result = await res.json();
+                    if (result.easterEgg) {
+                        showAlert('formAlert', '<span style="font-style:italic">&#x1F3E5; ' + result.easterEgg + '</span><br>Order created! ID: ' + result.id, 'info');
+                    } else {
+                        showAlert('formAlert', 'Order created successfully! ID: ' + result.id, 'success');
+                    }
+                    document.getElementById('createOrderForm').reset();
+                    loadOrders();
+                } else {
+                    const err = await res.json();
+                    showAlert('formAlert', err.message, 'danger');
+                }
+            } catch (e) {
+                showAlert('formAlert', 'Failed to create order: ' + e.message, 'danger');
+            }
+        });
+
+        loadOrders();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

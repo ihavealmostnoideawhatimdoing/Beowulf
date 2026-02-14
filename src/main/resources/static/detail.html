@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Details - Beowulf</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container">
+            <a class="navbar-brand" href="/">Beowulf</a>
+            <div>
+                <a href="/" class="btn btn-outline-light btn-sm me-2">Dashboard</a>
+                <a href="/orders.html" class="btn btn-outline-light btn-sm me-2">Orders</a>
+                <a href="/swagger-ui.html" class="btn btn-outline-info btn-sm" target="_blank">API Docs</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <a href="/orders.html" class="btn btn-outline-secondary btn-sm mb-3">&larr; Back to Orders</a>
+        <div id="pageAlert"></div>
+        <div id="content">
+            <p class="text-muted">Loading...</p>
+        </div>
+    </div>
+
+    <script>
+        const API = '';
+        const params = new URLSearchParams(window.location.search);
+        const orderId = params.get('id');
+
+        function showAlert(message, type) {
+            const container = document.getElementById('pageAlert');
+            container.innerHTML = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `;
+            container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            if (type === 'success' || type === 'info') {
+                setTimeout(() => { container.innerHTML = ''; }, 4000);
+            }
+        }
+
+        function clearAlert() {
+            document.getElementById('pageAlert').innerHTML = '';
+        }
+
+        function showConfirmation(message, onConfirm) {
+            const container = document.getElementById('pageAlert');
+            const id = 'confirm-' + Date.now();
+            container.innerHTML = `
+                <div class="alert alert-warning fade show" role="alert" id="${id}">
+                    <strong>${message}</strong>
+                    <div class="mt-2">
+                        <button class="btn btn-sm btn-warning me-2" id="${id}-yes">Yes, proceed</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="${id}-no">Cancel</button>
+                    </div>
+                </div>
+            `;
+            container.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            document.getElementById(id + '-yes').addEventListener('click', () => {
+                container.innerHTML = '';
+                onConfirm();
+            });
+            document.getElementById(id + '-no').addEventListener('click', () => {
+                container.innerHTML = '';
+            });
+        }
+
+        if (!orderId) {
+            document.getElementById('content').innerHTML = '<p class="text-danger">No order ID specified</p>';
+        } else {
+            loadOrder();
+        }
+
+        async function loadOrder() {
+            try {
+                const res = await fetch(API + '/api/orders/' + orderId);
+                if (!res.ok) throw new Error('Order not found');
+                const data = await res.json();
+                renderOrder(data);
+            } catch (e) {
+                document.getElementById('content').innerHTML = '<p class="text-danger">Failed to load order: ' + e.message + '</p>';
+            }
+        }
+
+        function statusColor(status) {
+            switch(status) {
+                case 'ORDERED': return 'primary';
+                case 'FINALIZED': return 'success';
+                case 'AMENDED': return 'warning';
+                case 'CANCELED': return 'secondary';
+                default: return 'info';
+            }
+        }
+
+        function renderOrder(data) {
+            const study = data.study;
+            let html = `
+                <h2>Order #${data.id}</h2>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header"><strong>Order Information</strong></div>
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr><td><strong>Order ID</strong></td><td>${data.id}</td></tr>
+                                    <tr><td><strong>Patient</strong></td><td>${data.firstName} ${data.lastName}</td></tr>
+                                    <tr><td><strong>MRN</strong></td><td>${data.mrn}</td></tr>
+                                    <tr><td><strong>DOB</strong></td><td>${data.dateOfBirth}</td></tr>
+                                    <tr><td><strong>Type</strong></td><td>${data.type}</td></tr>
+                                    <tr><td><strong>Created</strong></td><td>${new Date(data.createDate).toLocaleString()}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <div class="card-header"><strong>Study</strong></div>
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr><td><strong>Study ID</strong></td><td>${study.id}</td></tr>
+                                    <tr><td><strong>Status</strong></td><td><span class="badge bg-${statusColor(study.status)}">${study.status}</span></td></tr>
+                                    <tr><td><strong>Version</strong></td><td>${study.version}</td></tr>
+                                    <tr><td><strong>Updated</strong></td><td>${new Date(study.updateDate).toLocaleString()}</td></tr>
+                                </table>
+                                ${study.reportText ? `<div class="mt-2"><strong>Report:</strong><p class="border rounded p-2 bg-light mt-1">${escapeHtml(study.reportText)}</p></div>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            html += '<div class="card mb-3"><div class="card-header"><strong>Actions</strong></div><div class="card-body">';
+
+            if (study.status === 'ORDERED') {
+                html += `
+                    <div class="mb-3">
+                        <label class="form-label"><strong>Report Text</strong></label>
+                        <textarea id="reportText" class="form-control" rows="4" maxlength="5000">${study.reportText || ''}</textarea>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-primary" onclick="saveReport()">Save Report</button>
+                        <button class="btn btn-success" onclick="confirmSignStudy()">Sign Study</button>
+                        <button class="btn btn-danger" onclick="confirmCancelStudy()">Cancel Study</button>
+                    </div>
+                    <input type="hidden" id="studyVersion" value="${study.version}">
+                `;
+            } else if (study.status === 'FINALIZED' || study.status === 'AMENDED') {
+                html += `
+                    <div id="currentResult">Loading current result...</div>
+                    <div class="mt-3">
+                        <button class="btn btn-warning" onclick="showAmendForm()">
+                            ${study.status === 'AMENDED' ? 'Amend Again' : 'Amend Study'}
+                        </button>
+                    </div>
+                    <div id="amendForm" style="display:none" class="mt-3">
+                        <label class="form-label"><strong>Updated Report Text</strong></label>
+                        <textarea id="amendText" class="form-control" rows="4" maxlength="5000">${study.reportText || ''}</textarea>
+                        <div class="mt-2 d-flex gap-2">
+                            <button class="btn btn-warning" onclick="confirmAmendment()">Submit Amendment</button>
+                            <button class="btn btn-outline-secondary" onclick="hideAmendForm()">Cancel</button>
+                        </div>
+                    </div>
+                    <input type="hidden" id="studyVersion" value="${study.version}">
+                `;
+                loadCurrentResult();
+            } else if (study.status === 'CANCELED') {
+                html += '<p class="text-muted">Study has been canceled. No actions available.</p>';
+            }
+
+            html += '</div></div>';
+
+            if (study.status !== 'ORDERED' && study.status !== 'CANCELED') {
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <strong>Result History</strong>
+                            <button class="btn btn-sm btn-outline-primary float-end" onclick="loadHistory()">Show All Versions</button>
+                        </div>
+                        <div class="card-body" id="historySection">
+                            <p class="text-muted">Click "Show All Versions" to load history</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('content').innerHTML = html;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function loadCurrentResult() {
+            try {
+                const res = await fetch(API + '/api/orders/' + orderId + '/results');
+                if (res.ok) {
+                    const result = await res.json();
+                    document.getElementById('currentResult').innerHTML = `
+                        <div class="border rounded p-2 bg-light">
+                            <strong>Version ${result.version}</strong> - 
+                            <span class="badge bg-${result.status === 'FINALIZED' ? 'success' : 'warning'}">${result.status}</span><br>
+                            <small class="text-muted">Signed: ${new Date(result.signedOn).toLocaleString()}</small>
+                            <p class="mt-1 mb-0">${escapeHtml(result.report)}</p>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('currentResult').innerHTML = '<p class="text-muted">No results yet</p>';
+                }
+            } catch (e) {
+                document.getElementById('currentResult').innerHTML = '<p class="text-danger">Failed to load result</p>';
+            }
+        }
+
+        async function saveReport() {
+            clearAlert();
+            const version = parseInt(document.getElementById('studyVersion').value);
+            const reportText = document.getElementById('reportText').value;
+            const studyId = (await getStudyId());
+
+            try {
+                const res = await fetch(API + '/api/studies/' + studyId, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reportText, version })
+                });
+
+                if (res.ok) {
+                    showAlert('Report saved successfully.', 'success');
+                    loadOrder();
+                } else {
+                    const err = await res.json();
+                    if (res.status === 409) {
+                        showAlert('Study was modified by another user. The page has been refreshed.', 'warning');
+                        loadOrder();
+                    } else {
+                        showAlert(err.message, 'danger');
+                    }
+                }
+            } catch (e) {
+                showAlert('Failed: ' + e.message, 'danger');
+            }
+        }
+
+        function confirmSignStudy() {
+            const reportText = document.getElementById('reportText').value;
+            if (!reportText || reportText.trim() === '') {
+                showAlert('Please enter report text before signing.', 'warning');
+                return;
+            }
+            showConfirmation('Are you sure you want to sign this study? This action cannot be undone.', signStudy);
+        }
+
+        async function signStudy() {
+            const version = parseInt(document.getElementById('studyVersion').value);
+            const reportText = document.getElementById('reportText').value;
+            const studyId = (await getStudyId());
+
+            try {
+                const res = await fetch(API + '/api/studies/' + studyId, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'FINALIZED', reportText, version })
+                });
+
+                if (res.ok) {
+                    showAlert('Study signed successfully.', 'success');
+                    loadOrder();
+                } else {
+                    const err = await res.json();
+                    if (res.status === 409) {
+                        showAlert('Study was modified by another user. The page has been refreshed.', 'warning');
+                        loadOrder();
+                    } else {
+                        showAlert(err.message, 'danger');
+                    }
+                }
+            } catch (e) {
+                showAlert('Failed: ' + e.message, 'danger');
+            }
+        }
+
+        function confirmCancelStudy() {
+            showConfirmation('Are you sure you want to cancel this study?', cancelStudy);
+        }
+
+        async function cancelStudy() {
+            const version = parseInt(document.getElementById('studyVersion').value);
+            const studyId = (await getStudyId());
+
+            try {
+                const res = await fetch(API + '/api/studies/' + studyId, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'CANCELED', version })
+                });
+
+                if (res.ok) {
+                    showAlert('Study has been canceled.', 'info');
+                    loadOrder();
+                } else {
+                    const err = await res.json();
+                    if (res.status === 409) {
+                        showAlert('Study was modified by another user. The page has been refreshed.', 'warning');
+                        loadOrder();
+                    } else {
+                        showAlert(err.message, 'danger');
+                    }
+                }
+            } catch (e) {
+                showAlert('Failed: ' + e.message, 'danger');
+            }
+        }
+
+        function showAmendForm() {
+            document.getElementById('amendForm').style.display = 'block';
+        }
+
+        function hideAmendForm() {
+            document.getElementById('amendForm').style.display = 'none';
+        }
+
+        function confirmAmendment() {
+            const reportText = document.getElementById('amendText').value;
+            if (!reportText || reportText.trim() === '') {
+                showAlert('Please enter updated report text.', 'warning');
+                return;
+            }
+            showConfirmation('Are you sure you want to submit this amendment?', submitAmendment);
+        }
+
+        async function submitAmendment() {
+            const version = parseInt(document.getElementById('studyVersion').value);
+            const reportText = document.getElementById('amendText').value;
+            const studyId = (await getStudyId());
+
+            try {
+                const res = await fetch(API + '/api/studies/' + studyId, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'AMENDED', reportText, version })
+                });
+
+                if (res.ok) {
+                    showAlert('Amendment submitted successfully.', 'success');
+                    loadOrder();
+                } else {
+                    const err = await res.json();
+                    if (res.status === 409) {
+                        showAlert('Study was modified by another user. The page has been refreshed.', 'warning');
+                        loadOrder();
+                    } else {
+                        showAlert(err.message, 'danger');
+                    }
+                }
+            } catch (e) {
+                showAlert('Failed: ' + e.message, 'danger');
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch(API + '/api/orders/' + orderId + '/results/history');
+                const results = await res.json();
+                if (results.length === 0) {
+                    document.getElementById('historySection').innerHTML = '<p class="text-muted">No results yet</p>';
+                    return;
+                }
+                let html = results.map(r => `
+                    <div class="border rounded p-2 mb-2 ${r.isCurrent ? 'bg-light border-primary' : ''}">
+                        <strong>Version ${r.version}</strong> - 
+                        <span class="badge bg-${r.status === 'FINALIZED' ? 'success' : 'warning'}">${r.status}</span>
+                        ${r.isCurrent ? '<span class="badge bg-info">Current</span>' : ''}
+                        <br><small class="text-muted">Signed: ${new Date(r.signedOn).toLocaleString()}</small>
+                        <p class="mt-1 mb-0">${escapeHtml(r.report)}</p>
+                    </div>
+                `).join('');
+                document.getElementById('historySection').innerHTML = html;
+            } catch (e) {
+                document.getElementById('historySection').innerHTML = '<p class="text-danger">Failed to load history</p>';
+            }
+        }
+
+        async function getStudyId() {
+            const res = await fetch(API + '/api/orders/' + orderId + '/study');
+            const study = await res.json();
+            return study.id;
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

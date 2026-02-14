@@ -1,0 +1,13 @@
+body {
+    background-color: #f8f9fa;
+}
+.card {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.table-hover tbody tr:hover {
+    cursor: pointer;
+}
+.navbar-brand {
+    font-weight: bold;
+    letter-spacing: 1px;
+}
