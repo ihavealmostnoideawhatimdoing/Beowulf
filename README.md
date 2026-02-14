@@ -48,6 +48,33 @@ Order (1) <---- (many) OrderResult
 - **Study**: Execution/processing of an Order (1:1). Status: ORDERED -> FINALIZED -> AMENDED
 - **OrderResult**: Immutable, versioned signed reports. Created automatically when studies are signed/amended
 
+## Database Schema
+
+### Entity Relationships
+```
+Patient (1) ←──── (many) Order
+Order (1) ←──── (1) Study
+Order (1) ←──── (many) OrderResult
+```
+
+### Tables
+- **patient** - Patient demographics with unique MRN
+- **orders** - Clinical orders with patient data snapshot
+- **study** - Diagnostic study execution (1:1 with Order)
+- **order_result** - Versioned, immutable signed reports
+
+### Migration Files
+Schema is managed with Flyway migrations:
+- `src/main/resources/db/migration/V1__create_tables.sql`
+- `src/main/resources/db/migration/V2__add_indexes.sql`
+
+### Viewing the Schema
+Run the application and access H2 Console:
+- URL: http://localhost:5000/h2-console
+- JDBC URL: `jdbc:h2:mem:clinicaldb`
+- Username: `sa`
+- Password: (blank)
+
 ### Key Workflows
 
 1. **Order Creation** (`POST /api/orders`): Creates/updates patient, creates order + study atomically
